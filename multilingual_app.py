@@ -5,7 +5,7 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES
 import gradio as gr
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"🚀 Running on device: {DEVICE}")
+print(f"Running on device: {DEVICE}")
 
 # --- Global Model Initialization ---
 MODEL = None
@@ -126,7 +126,7 @@ def get_supported_languages_display() -> str:
     line2 = " • ".join(language_items[mid:])
     
     return f"""
-### 🌍 Supported Languages ({len(SUPPORTED_LANGUAGES)} total)
+### Supported Languages ({len(SUPPORTED_LANGUAGES)} total)
 {line1}
 
 {line2}
@@ -270,7 +270,7 @@ with gr.Blocks() as demo:
             )
             
             gr.Markdown(
-                "💡 **Note**: Ensure that the reference clip matches the specified language tag. Otherwise, language transfer outputs may inherit the accent of the reference clip's language. To mitigate this, set the CFG weight to 0.",
+                "**Note**: Ensure that the reference clip matches the specified language tag. Otherwise, language transfer outputs may inherit the accent of the reference clip's language. To mitigate this, set the CFG weight to 0.",
                 elem_classes=["audio-note"]
             )
             
