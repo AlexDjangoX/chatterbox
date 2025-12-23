@@ -46,3 +46,13 @@ checkpoints/
 
 # Ignore generated sample .wav files
 **/*.wav
+
+# Custom setup and chat files (contain tokens/credentials)
+start_chat.sh
+start_polish.sh
+setup_hf.py
+setup_hf_manual.py
+chat_app.py
+simple_chat.py
+test_chatterbox.py
+miniconda.sh

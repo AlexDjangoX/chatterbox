@@ -18,21 +18,33 @@ print(f"Using device: {device}")
 print(f"PyTorch version: {torch.__version__}")
 
 try:
-    from chatterbox.vc import ChatterboxVC
-    print("[OK] Chatterbox VC imported successfully!")
+    # Try the faster Turbo model first
+    print("Testing Chatterbox Turbo TTS...")
+    from chatterbox.tts_turbo import ChatterboxTurboTTS
 
-    # Try to load the model (this will download if needed)
-    print("Loading Chatterbox VC model...")
-    model = ChatterboxVC.from_pretrained(device)
-    print("[OK] Chatterbox VC model loaded successfully!")
+    print("Loading Turbo model...")
+    model = ChatterboxTurboTTS.from_pretrained(device)
+    print("[OK] Turbo model loaded successfully!")
 
-    print("\nSUCCESS: Chatterbox is ready to use!")
-    print("You can now run:")
-    print("  python example_vc.py")
-    print("  python example_tts.py")
-    print("  python gradio_vc_app.py")
+    # Test with simple English text
+    test_text = "Hello, this is a test of Chatterbox Turbo."
+    print(f"Generating audio for: '{test_text}'")
+
+    wav = model.generate(test_text)
+    print(f"[OK] Audio generated! Shape: {wav.shape}, Sample rate: {model.sr}")
+
+    # Save the test audio
+    import torchaudio as ta
+    ta.save("test_output.wav", wav, model.sr)
+    print("[OK] Saved test audio to test_output.wav")
+
+    print("\nSUCCESS: Chatterbox Turbo is working!")
+    print("You can now run the web apps:")
+    print("  python gradio_tts_turbo_app.py")
 
 except Exception as e:
     print(f"ERROR: {e}")
+    import traceback
+    traceback.print_exc()
     import traceback
     traceback.print_exc()

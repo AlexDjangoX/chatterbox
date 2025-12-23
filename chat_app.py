@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Real-time Chat App with Chatterbox TTS
+Real-time Chat App with Chatterbox TTS - Voice Input & Output
 """
 
 import random
@@ -10,12 +10,21 @@ import gradio as gr
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 import tempfile
 import os
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    print("Whisper not installed. Voice input disabled. Install with: pip install openai-whisper")
+
+import torchaudio as ta
 
 # Device setup
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Global model variable
+# Global model variables
 model = None
+whisper_model = None
 
 def load_model():
     """Load the TTS model"""
@@ -24,6 +33,34 @@ def load_model():
         print(f"Loading Chatterbox Turbo on {DEVICE}...")
         model = ChatterboxTurboTTS.from_pretrained(DEVICE)
     return model
+
+def load_whisper():
+    """Load Whisper model for speech-to-text"""
+    global whisper_model
+    if not WHISPER_AVAILABLE:
+        return None
+    if whisper_model is None:
+        print("Loading Whisper model for speech recognition...")
+        whisper_model = whisper.load_model("base")  # Use 'base' for faster, lighter model
+    return whisper_model
+
+def audio_to_text(audio_file):
+    """Convert audio file to text using Whisper"""
+    if not WHISPER_AVAILABLE or audio_file is None:
+        return None
+    
+    try:
+        whisper_model = load_whisper()
+        if whisper_model is None:
+            return None
+        
+        # Transcribe audio
+        result = whisper_model.transcribe(audio_file)
+        text = result["text"].strip()
+        return text if text else None
+    except Exception as e:
+        print(f"Speech-to-text error: {e}")
+        return None
 
 def generate_response(message, history):
     """Generate response for chat message with optional TTS"""
@@ -75,12 +112,26 @@ def create_chat_interface():
         # Chat history
         chatbot = gr.Chatbot(height=400, show_label=False, type="messages")
 
-        # Message input
-        msg = gr.Textbox(
-            placeholder="Type your message here...",
-            show_label=False,
-            container=False
-        )
+        with gr.Row():
+            # Text input
+            msg = gr.Textbox(
+                placeholder="Type your message here...",
+                show_label=False,
+                container=False,
+                scale=3
+            )
+            
+            # Voice input
+            voice_input = gr.Audio(
+                sources=["microphone"],
+                type="filepath",
+                label="🎤 Speak",
+                show_label=False,
+                container=False,
+                scale=1
+            )
+
+        gr.Markdown("💡 **Tip:** Type your message OR click the microphone to speak!")
 
         # Audio output for TTS
         audio_output = gr.Audio(
@@ -103,22 +154,25 @@ def create_chat_interface():
         )
 
         def respond(message, history):
-            if not message.strip():
+            if not message or not message.strip():
                 return history, None, "Ready to chat!", "Voice: Checking..."
 
             # Add user message to history
-            history = history + [[message, None]]
+            history.append({"role": "user", "content": message})
 
             try:
                 # Generate bot response
                 bot_text, audio_file = generate_response(message, history)
 
                 # Update history with bot response
-                history[-1][1] = bot_text
+                history.append({"role": "assistant", "content": bot_text})
 
                 # Check TTS status
-                if audio_file:
+                if audio_file and model:
                     tts_msg = f"Voice: Active ({model.sr}Hz)"
+                    status_msg = "Response generated with voice!"
+                elif audio_file:
+                    tts_msg = "Voice: Active"
                     status_msg = "Response generated with voice!"
                 else:
                     tts_msg = "Voice: Offline (needs HF token)"
@@ -127,13 +181,35 @@ def create_chat_interface():
                 return history, audio_file, status_msg, tts_msg
 
             except Exception as e:
-                history[-1][1] = f"Sorry, I encountered an error: {str(e)}"
+                history.append({"role": "assistant", "content": f"Sorry, I encountered an error: {str(e)}"})
                 return history, None, f"Error: {str(e)}", "Voice: Error"
 
-        # Submit button
+        def respond_to_voice(audio_file, history):
+            """Handle voice input"""
+            if audio_file is None:
+                return history, None, "No audio recorded", "Voice: Ready"
+            
+            # Convert speech to text
+            text = audio_to_text(audio_file)
+            
+            if not text:
+                return history, None, "Could not understand audio. Please try again.", "Voice: Error"
+            
+            # Use the text response function
+            return respond(text, history)
+
+        # Submit text message
         msg.submit(
             respond,
             inputs=[msg, chatbot],
+            outputs=[chatbot, audio_output, status, tts_status],
+            queue=True
+        ).then(lambda: "", None, msg)  # Clear text input after sending
+
+        # Submit voice message
+        voice_input.change(
+            respond_to_voice,
+            inputs=[voice_input, chatbot],
             outputs=[chatbot, audio_output, status, tts_status],
             queue=True
         )
@@ -150,19 +226,21 @@ def create_chat_interface():
         # Instructions
         gr.Markdown("""
         ### How to Use:
-        1. Type your message and press Enter
+        1. **Type** your message and press Enter, OR **click the microphone** to speak
         2. The AI will respond with text and voice
         3. Listen to the voice response in the audio player
         4. Continue chatting!
 
         ### Features:
+        - **Voice Input**: Speak to the AI using your microphone
+        - **Voice Output**: AI responds with natural-sounding voice
         - Real-time text responses
-        - Voice synthesis with Chatterbox Turbo
         - Conversation history
         - Natural-sounding AI voice
 
         ### Note:
-        First response may take longer as the model loads.
+        - First response may take longer as models load
+        - Voice input requires Whisper (install with: `pip install openai-whisper`)
         """)
 
     return demo
@@ -173,6 +251,6 @@ if __name__ == "__main__":
     demo.launch(
         share=True,
         show_error=True,
-        server_name="0.0.0.0"
-        # Let Gradio find an available port automatically (removed server_port to auto-detect)
+        server_name="0.0.0.0",
+        server_port=7864  # Use port 7864 (7860-7863 are in use)
     )
